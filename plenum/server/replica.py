@@ -1384,39 +1384,40 @@ class Replica(HasActionQueue, MessageProcessor):
                      format(self, i, key))
         return i
 
-    # TODO: This needs to be worked ASAP
-    # def gc(self, tillSeqNo):
-    #     logger.debug("{} cleaning up till {}".format(self, tillSeqNo))
-    #     tpcKeys = set()
-    #     reqKeys = set()
-    #     for (v, p), (reqKey, _) in self.sentPrePrepares.items():
-    #         if p <= tillSeqNo:
-    #             tpcKeys.add((v, p))
-    #             reqKeys.add(reqKey)
-    #     for (v, p), pp in self.prePrepares.items():
-    #         if p <= tillSeqNo:
-    #             tpcKeys.add((v, p))
-    #             reqKeys.add(reqKey)
-    #
-    #     logger.debug("{} found {} 3 phase keys to clean".
-    #                  format(self, len(tpcKeys)))
-    #     logger.debug("{} found {} request keys to clean".
-    #                  format(self, len(reqKeys)))
-    #
-    #     for k in tpcKeys:
-    #         self.sentPrePrepares.pop(k, None)
-    #         self.prePrepares.pop(k, None)
-    #         self.prepares.pop(k, None)
-    #         self.commits.pop(k, None)
-    #         # if k in self.ordered:
-    #         #     self.ordered.remove(k)
-    #
-    #     for k in reqKeys:
-    #         self.requests[k].forwardedTo -= 1
-    #         if self.requests[k].forwardedTo == 0:
-    #             logger.debug('{} clearing requests {} from previous checkpoints'.
-    #                          format(self, len(reqKeys)))
-    #             self.requests.pop(k)
+    def gc(self, tillSeqNo):
+        logger.debug("{} cleaning up till {}".format(self, tillSeqNo))
+        tpcKeys = set()
+        reqKeys = set()
+        for (v, p), pp in self.sentPrePrepares.items():
+            if p <= tillSeqNo:
+                tpcKeys.add((v, p))
+                for reqKey in pp.reqIdr:
+                    reqKeys.add(reqKey)
+        for (v, p), pp in self.prePrepares.items():
+            if p <= tillSeqNo:
+                tpcKeys.add((v, p))
+                for reqKey in pp.reqIdr:
+                    reqKeys.add(reqKey)
+
+        logger.debug("{} found {} 3 phase keys to clean".
+                     format(self, len(tpcKeys)))
+        logger.debug("{} found {} request keys to clean".
+                     format(self, len(reqKeys)))
+
+        for k in tpcKeys:
+            self.sentPrePrepares.pop(k, None)
+            self.prePrepares.pop(k, None)
+            self.prepares.pop(k, None)
+            self.commits.pop(k, None)
+            # if k in self.ordered:
+            #     self.ordered.remove(k)
+
+        for k in reqKeys:
+            self.requests[k].forwardedTo -= 1
+            if self.requests[k].forwardedTo == 0:
+                logger.debug('{} clearing requests {} from previous checkpoints'.
+                             format(self, len(reqKeys)))
+                self.requests.pop(k)
 
     def stashOutsideWatermarks(self, item: Union[ReqDigest, Tuple]):
         self.stashingWhileOutsideWaterMarks.append(item)
